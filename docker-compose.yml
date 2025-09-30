@@ -1,0 +1,136 @@
+services:
+  db:
+    image: postgres:15
+    container_name: aprender_db
+    environment:
+      POSTGRES_DB: aprender_sistema_db
+      POSTGRES_USER: adm_aprender
+      POSTGRES_PASSWORD: aprender123456
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adm_aprender -d aprender_sistema_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - aprender_network
+
+  web:
+    build: .
+    container_name: aprender_web_${BRANCH:-main}
+    env_file:
+      - .env.${BRANCH:-main}
+    environment:
+      # Sobrescrever configurações específicas do Docker se necessário
+      DB_HOST: db
+      CURRENT_BRANCH: ${BRANCH:-main}
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    networks:
+      - aprender_network
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile.streamlit
+    container_name: aprender_streamlit_${BRANCH:-main}
+    env_file:
+      - .env.${BRANCH:-main}
+    environment:
+      # Sobrescrever configurações específicas do Docker
+      DB_HOST: db
+      CURRENT_BRANCH: ${BRANCH:-main}
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "streamlit run dashboard_streamlit.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --server.enableXsrfProtection false --server.enableCORS false"
+    networks:
+      - aprender_network
+
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp
+    container_name: aprender_mcp_${BRANCH:-main}
+    env_file:
+      - .env.${BRANCH:-main}
+    environment:
+      # Sobrescrever configurações específicas do MCP
+      DB_HOST: db
+      CURRENT_BRANCH: ${BRANCH:-main}
+      DJANGO_SETTINGS_MODULE: aprender_sistema.settings
+      MCP_HOST: "0.0.0.0"
+      MCP_PORT: "3001"
+      MCP_LOG_LEVEL: INFO
+    volumes:
+      - .:/app
+      - mcp_logs:/app/logs
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - aprender_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: aprender_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - aprender_network
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: aprender_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "8080:80"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - aprender_network
+
+volumes:
+  postgres_data:
+  mcp_logs:
+  pgadmin_data:
+  redis_data:
+
+networks:
+  aprender_network:
+    driver: bridge
