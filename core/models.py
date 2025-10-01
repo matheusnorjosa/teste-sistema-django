@@ -1389,3 +1389,123 @@ class ImportacaoCursosCSV(models.Model):
             'ERRO': '❌'
         }.get(self.status, '❓')
         return f"{status_icon} {self.arquivo_nome} - {self.get_status_display()}"
+
+
+# =========================
+# MODELOS DA PLANILHA CONTROLE
+# =========================
+
+class ControleAcoes(models.Model):
+    """🟥 AÇÕES da planilha Controle"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    municipio = models.ForeignKey(Municipio, on_delete=models.PROTECT, verbose_name="Município")
+    projeto = models.ForeignKey(Projeto, on_delete=models.PROTECT, verbose_name="Projeto")
+    coordenador = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Coordenador")
+    data_entrega = models.DateField(verbose_name="Data da Entrega")
+    data_carta = models.DateField(verbose_name="Data da Carta")
+    contato_inicial = models.TextField(blank=True, verbose_name="Contato Inicial")
+    data_reuniao_alinhamento = models.DateField(blank=True, null=True, verbose_name="Data Reunião Alinhamento")
+    observacao = models.TextField(blank=True, verbose_name="Observação")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Ação de Controle"
+        verbose_name_plural = "Ações de Controle"
+        ordering = ['-data_entrega', 'municipio__nome']
+    
+    def __str__(self):
+        return f"{self.municipio.nome} - {self.projeto.nome} ({self.data_entrega})"
+
+
+class Compras(models.Model):
+    """🟥 COMPRAS da planilha Controle"""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    codigo = models.CharField(max_length=50, verbose_name="Código")
+    produto = models.CharField(max_length=255, verbose_name="Produto")
+    quantidade = models.IntegerField(verbose_name="Quantidade")
+    municipio = models.ForeignKey(Municipio, on_delete=models.PROTECT, verbose_name="Município")
+    data_compra = models.DateField(verbose_name="Data da Compra")
+    uso_colecoes = models.CharField(max_length=50, verbose_name="Uso das Coleções")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        verbose_name = "Compra"
+        verbose_name_plural = "Compras"
+        ordering = ['-data_compra', 'municipio__nome']
+    
+    def __str__(self):
+        return f"{self.produto} - {self.municipio.nome} ({self.quantidade} unidades)"
+
+
+class AcaoDAT(models.Model):
+    """ℹ️ DAT da planilha Controle"""
+    
+    PLATAFORMA_CHOICES = [
+        ('aprender_avaliar', 'Aprender Avaliar'),
+        ('aprender_formar', 'Aprender Formar'),
+    ]
+    
+    TIPO_ACAO_CHOICES = [
+        ('manutencao', 'Manutenção'),
+        ('criacao_curso', 'Criação de Curso'),
+        ('geracao_chave', 'Geração de Chave de Inscrição'),
+        ('recebimento_aluno', 'Recebimento de Aluno'),
+        ('validacao_aluno', 'Validação de Aluno'),
+        ('importacao_aluno', 'Importação de Aluno'),
+        ('configuracao', 'Configuração'),
+        ('outros', 'Outros'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    plataforma = models.CharField(max_length=50, choices=PLATAFORMA_CHOICES, verbose_name="Plataforma")
+    tipo_acao = models.CharField(max_length=100, choices=TIPO_ACAO_CHOICES, verbose_name="Tipo de Ação")
+    municipio = models.ForeignKey(Municipio, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Município")
+    projeto = models.ForeignKey(Projeto, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Projeto")
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Responsável")
+    data_acao = models.DateTimeField(auto_now_add=True, verbose_name="Data da Ação")
+    observacao = models.TextField(blank=True, verbose_name="Observação")
+    
+    class Meta:
+        verbose_name = "Ação DAT"
+        verbose_name_plural = "Ações DAT"
+        ordering = ['-data_acao', 'plataforma']
+    
+    def __str__(self):
+        municipio_str = f" - {self.municipio.nome}" if self.municipio else ""
+        return f"{self.get_plataforma_display()} - {self.get_tipo_acao_display()}{municipio_str}"
+
+
+class CadastroAcao(models.Model):
+    """☑️ CADASTROS da planilha Controle"""
+    
+    TIPO_ACAO_CHOICES = [
+        ('criacao_curso', 'Criação de Curso'),
+        ('configuracao_plataforma', 'Configuração de Plataforma'),
+        ('importacao_dados', 'Importação de Dados'),
+        ('manutencao_sistema', 'Manutenção do Sistema'),
+        ('suporte_usuario', 'Suporte ao Usuário'),
+        ('backup_dados', 'Backup de Dados'),
+        ('atualizacao_sistema', 'Atualização do Sistema'),
+        ('outros', 'Outros'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    municipio = models.ForeignKey(Municipio, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Município")
+    projeto = models.ForeignKey(Projeto, on_delete=models.PROTECT, blank=True, null=True, verbose_name="Projeto")
+    tipo_acao = models.CharField(max_length=100, choices=TIPO_ACAO_CHOICES, verbose_name="Tipo de Ação")
+    responsavel = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, verbose_name="Responsável")
+    observacao = models.TextField(blank=True, verbose_name="Observação")
+    data_cadastro = models.DateTimeField(auto_now_add=True, verbose_name="Data do Cadastro")
+    
+    class Meta:
+        verbose_name = "Cadastro de Ação"
+        verbose_name_plural = "Cadastros de Ação"
+        ordering = ['-data_cadastro', 'tipo_acao']
+    
+    def __str__(self):
+        municipio_str = f" - {self.municipio.nome}" if self.municipio else ""
+        return f"{self.get_tipo_acao_display()}{municipio_str} ({self.responsavel.first_name})"
